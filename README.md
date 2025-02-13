@@ -1,0 +1,1 @@
+Log processing app for math practicing application sending selected logs to an email
