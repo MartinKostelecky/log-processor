@@ -2,7 +2,6 @@ spring:
   application:
     name: log-processor
 
-  profiles:
-    active: dev
+
 
 

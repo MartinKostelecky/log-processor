@@ -1,20 +1,24 @@
 package cz.martinkostelecky.logprocessor;
 
 import cz.martinkostelecky.logprocessor.service.EmailService;
+import org.springframework.stereotype.Service;
 
 import java.io.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedList;
 
+//TODO log to console
+@Service
 public class LogProcessor {
-    final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d.M.yyyy HH:mm:ss");
+    final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final EmailService emailService;
 
     // DEV specify paths
-    private static final String DEV_READER_PATH = "";
-    private static final String DEV_WRITER_PATH = "";
+    private static final String DEV_READER_PATH = "/home/myprogramminghub/Plocha/app.log";
+    private static final String DEV_WRITER_PATH = "/home/myprogramminghub/Plocha/logs.log";
 
     // PROD specify path
     //private static final String PROD_READER_PATH = "";
@@ -25,42 +29,59 @@ public class LogProcessor {
     String line = "";
     LocalDateTime localDateTimeActual;
     LocalDateTime localDateTimeLast;
-    LinkedList<String> lines;
+    LinkedList<String> lines = new LinkedList<>();
     LocalDateTime localDateTimeNow = LocalDateTime.now();
 
     public LogProcessor(EmailService emailService) {
         this.emailService = emailService;
-        this.lines = new LinkedList<>();
     }
 
     public void processLogs() throws IOException {
         setupReaderAndWriter();
 
-        if ((line = reader.readLine()) == null) {
-            while ((line = reader.readLine()) != null) {
-                writeLog("Writing logs started at: " + localDateTimeNow);
+        writeLog("Writing logs started at: " + localDateTimeNow);
+
+        while ((line = reader.readLine()) != null) {
+
+            if (containsRelevantEntries(line) && containsValidDate(line)) {
+                processLine(line);
+            }
+        }
+
+        writeLog("Writing logs done at: " + localDateTimeNow);
+        closeReaderAndWriter();
+    }
+
+    private boolean containsRelevantEntries(String line) {
+        return line.toLowerCase().contains("user") || line.toLowerCase().contains("example") || line.toLowerCase().contains("badge");
+    }
+
+    private boolean containsValidDate(String line) {
+
+        try {
+            String dateString = line.substring(0, 19);
+            LocalDateTime.parse(dateString, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            return true;
+        } catch (DateTimeParseException | StringIndexOutOfBoundsException e) {
+            // Skip the line if it doesn't contain a valid date
+            return false;
+        }
+    }
+
+    private void processLine(String line) throws IOException {
+
+        localDateTimeActual = LocalDateTime.parse(line.substring(0, 19), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+
+        if (!lines.isEmpty()) {
+            localDateTimeLast = LocalDateTime.parse(lines.getLast().substring(0, 19), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+
+            if (localDateTimeActual.equals(localDateTimeLast) || localDateTimeActual.isAfter(localDateTimeLast)) {
                 lines.add(line);
                 writeLog(line);
-                writeLog("Writing logs done at: " + localDateTimeNow);
             }
         } else {
-            while ((line = reader.readLine()) != null) {
-
-                localDateTimeActual = LocalDateTime.parse(lines.getLast().substring(0, 18), formatter);
-                localDateTimeLast = LocalDateTime.parse(line.substring(0, 18), formatter);
-
-                writeLog("Writing logs started at: " + localDateTimeNow);
-
-                if (line.toLowerCase().contains("user") || line.toLowerCase().contains("example") || line.toLowerCase().contains("badge")) {
-                    if (localDateTimeActual.isAfter(localDateTimeLast)) {
-                        lines.add(line);
-                        writeLog(line);
-                    }
-                }
-            }
-
-            writeLog("Writing logs done at: " + localDateTimeNow);
-            closeReaderAndWriter();
+            lines.add(line);
+            writeLog(line);
         }
     }
 
